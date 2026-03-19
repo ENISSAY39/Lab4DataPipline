@@ -1,7 +1,12 @@
 #!/bin/bash
-
+NB_THREAD=$(pgrep -c -f "$0")
+  if [ $NB_THREAD -gt 1 ]; then
+  echo "Already running"
+exit
+fi
 # CONFIG
 API_TOKEN="w10pmh5zlmpcVM2b7uglyQ=="
+PEXELS_API_KEY="UdS2OtheW4cpSPQuSyIZtCLtDCYvZjsRRyxc9wsgbcjKiOBiZ0PJGVeJ"
 ALBUM_ID="IKJMxZugjcsfgORWnGhqhtzX"
 
 SOURCE_DIR="/home/yassine/datasource"
@@ -59,7 +64,7 @@ while read filename; do
 
 done < $TMP_DIR/to_delete.txt
 
-# 🔥 REFRESH AFTER DELETE
+# REFRESH AFTER DELETE
 echo "Refreshing remote after delete..."
 
 curl \
