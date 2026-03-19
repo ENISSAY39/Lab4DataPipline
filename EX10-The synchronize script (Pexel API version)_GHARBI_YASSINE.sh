@@ -141,6 +141,44 @@ while read photo_id filename; do
 
 done < $TMP_DIR/no_tags.txt
 
+# PEXELS DESCRIPTION (ONLY IF NO DESCRIPTION)
+
+jq -r '.photos[] | select(.description == null or .description == "") | "\(.id) \(.title)"' $TMP_DIR/remote.json > $TMP_DIR/all_photos.txt
+
+while read photo_id filename; do
+
+  FILEPATH="$SOURCE_DIR/$filename"
+
+  if [ ! -f "$FILEPATH" ]; then
+    continue
+  fi
+
+  PEXELS_ID=$(echo "$filename" | cut -d'_' -f2)
+  PEXELS_ID=${PEXELS_ID%%_*}
+
+  ALT=$(curl -s -H "Authorization: $PEXELS_API_KEY" \
+  https://api.pexels.com/v1/photos/$PEXELS_ID | jq -r '.alt')
+
+  sleep 0.2
+
+  if [ "$ALT" = "null" ] || [ -z "$ALT" ]; then
+    continue
+  fi
+
+  ALT=$(echo "$ALT" | sed 's/"/\\"/g')
+
+  curl -s --request PATCH \
+  --url https://photoserver2.mde.epf.fr/api/v2/Photo::description \
+  --header "Authorization: $API_TOKEN" \
+  --header "Content-Type: application/json" \
+  --header "Accept: application/json" \
+  --data "{
+    \"photo_id\": \"$photo_id\",
+    \"description\": \"$ALT\"
+  }"
+
+  echo "Description added for $filename"
+
 done < $TMP_DIR/all_photos.txt
 
 echo "SYNC COMPLETE"
