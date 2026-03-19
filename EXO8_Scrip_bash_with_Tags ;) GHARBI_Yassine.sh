@@ -1,9 +1,11 @@
 #!/bin/bash
-NB_THREAD=$(pgrep -c -f "$0")
-  if [ $NB_THREAD -gt 1 ]; then
-  echo "Already running"
-exit
-fi
+
+#NB_THREAD=$(pgrep -c -f "$0")
+#if [ $NB_THREAD -gt 1 ]; then
+#  echo "Already running"
+#  exit
+#fi
+
 # CONFIG
 API_TOKEN="w10pmh5zlmpcVM2b7uglyQ=="
 PEXELS_API_KEY="UdS2OtheW4cpSPQuSyIZtCLtDCYvZjsRRyxc9wsgbcjKiOBiZ0PJGVeJ"
@@ -29,8 +31,8 @@ if [ ! -f "$PYTHON_SCRIPT" ]; then
   exit 1
 fi
 
-# LOCAL FILE LIST
-ls "$SOURCE_DIR" > $TMP_DIR/local_list.txt
+# LOCAL FILE LIST (IMAGES ONLY)
+ls "$SOURCE_DIR" | grep -E '\.(jpg|jpeg|png)$' > $TMP_DIR/local_list.txt
 sort $TMP_DIR/local_list.txt > $TMP_DIR/local_sorted.txt
 
 # REMOTE FILE LIST
@@ -43,12 +45,10 @@ curl \
 # Extract titles
 jq -r '.photos[] | .title' $TMP_DIR/remote.json | sort > $TMP_DIR/remote_sorted.txt
 
-# FILES TO DELETE (remote - local)
+# FILES TO DELETE
 comm -23 $TMP_DIR/remote_sorted.txt $TMP_DIR/local_sorted.txt > $TMP_DIR/to_delete.txt
 
-# DELETE LOOP
 while read filename; do
-
   PHOTO_ID=$(jq -r ".photos[] | select(.title==\"$filename\").id" $TMP_DIR/remote.json)
 
   if [ ! -z "$PHOTO_ID" ]; then
@@ -59,14 +59,11 @@ while read filename; do
     --header "Accept: application/json" \
     --data "{\"from_id\":\"$ALBUM_ID\",\"photo_ids\":[\"$PHOTO_ID\"]}"
 
-    echo "Deleted $filename (ID: $PHOTO_ID)"
+    echo "Deleted $filename"
   fi
-
 done < $TMP_DIR/to_delete.txt
 
 # REFRESH AFTER DELETE
-echo "Refreshing remote after delete..."
-
 curl \
 --url "https://photoserver2.mde.epf.fr/api/v2/Album::photos?album_id=$ALBUM_ID" \
 --header "Authorization: $API_TOKEN" \
@@ -75,16 +72,13 @@ curl \
 
 jq -r '.photos[] | .title' $TMP_DIR/remote.json | sort > $TMP_DIR/remote_sorted.txt
 
-# FILES TO UPLOAD (local - remote)
+# FILES TO UPLOAD
 comm -13 $TMP_DIR/remote_sorted.txt $TMP_DIR/local_sorted.txt > $TMP_DIR/to_upload.txt
 
-# UPLOAD LOOP
 while read filename; do
-
   FILEPATH="$SOURCE_DIR/$filename"
 
   if [ ! -f "$FILEPATH" ]; then
-    echo "File not found, skipping $filename"
     continue
   fi
 
@@ -105,23 +99,21 @@ while read filename; do
 
 done < $TMP_DIR/to_upload.txt
 
-# REFRESH REMOTE DATA
+# REFRESH REMOTE
 curl \
 --url "https://photoserver2.mde.epf.fr/api/v2/Album::photos?album_id=$ALBUM_ID" \
 --header "Authorization: $API_TOKEN" \
 --header "Accept: application/json" \
 > $TMP_DIR/remote.json
 
-# TAGGING (PHOTOS WITHOUT TAGS)
+# TAGGING
 jq -r '.photos[] | select(.tags == []) | "\(.id) \(.title)"' $TMP_DIR/remote.json > $TMP_DIR/no_tags.txt
 
 while read photo_id filename; do
 
   FILEPATH="$SOURCE_DIR/$filename"
 
-  # Skip si fichier absent
   if [ ! -f "$FILEPATH" ]; then
-    echo "File not found locally, skipping $filename"
     continue
   fi
 
@@ -130,11 +122,7 @@ while read photo_id filename; do
   COLOR1=$(echo $COLORS | cut -d',' -f1)
   COLOR2=$(echo $COLORS | cut -d',' -f2)
 
-  echo "Colors for $filename: $COLOR1 $COLOR2"
-
-  # Sécurité JSON
   if [ -z "$COLOR1" ] || [ -z "$COLOR2" ]; then
-    echo "Invalid colors, skipping $filename"
     continue
   fi
 
@@ -152,5 +140,45 @@ while read photo_id filename; do
   echo "Tagged $filename"
 
 done < $TMP_DIR/no_tags.txt
+
+# PEXELS DESCRIPTION (ONLY IF NO DESCRIPTION)
+
+jq -r '.photos[] | select(.description == null or .description == "") | "\(.id) \(.title)"' $TMP_DIR/remote.json > $TMP_DIR/all_photos.txt
+
+while read photo_id filename; do
+
+  FILEPATH="$SOURCE_DIR/$filename"
+
+  if [ ! -f "$FILEPATH" ]; then
+    continue
+  fi
+
+  PEXELS_ID=$(echo "$filename" | cut -d'_' -f2)
+  PEXELS_ID=${PEXELS_ID%%_*}
+
+  ALT=$(curl -s -H "Authorization: $PEXELS_API_KEY" \
+  https://api.pexels.com/v1/photos/$PEXELS_ID | jq -r '.alt')
+
+  sleep 0.2
+
+  if [ "$ALT" = "null" ] || [ -z "$ALT" ]; then
+    continue
+  fi
+
+  ALT=$(echo "$ALT" | sed 's/"/\\"/g')
+
+  curl -s --request PATCH \
+  --url https://photoserver2.mde.epf.fr/api/v2/Photo::description \
+  --header "Authorization: $API_TOKEN" \
+  --header "Content-Type: application/json" \
+  --header "Accept: application/json" \
+  --data "{
+    \"photo_id\": \"$photo_id\",
+    \"description\": \"$ALT\"
+  }"
+
+  echo "Description added for $filename"
+
+done < $TMP_DIR/all_photos.txt
 
 echo "SYNC COMPLETE"
