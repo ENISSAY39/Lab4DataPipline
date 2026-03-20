@@ -1,11 +1,5 @@
 #!/bin/bash
 
-NB_THREAD=$(pgrep -c -f "$0")
-if [ $NB_THREAD -gt 1 ]; then
-  echo "Already running"
-  exit
-fi
-
 # CONFIG
 API_TOKEN="w10pmh5zlmpcVM2b7uglyQ=="
 
