@@ -8,7 +8,7 @@ fi
 
 # CONFIG
 API_TOKEN="w10pmh5zlmpcVM2b7uglyQ=="
-PEXELS_API_KEY="UdS2OtheW4cpSPQuSyIZtCLtDCYvZjsRRyxc9wsgbcjKiOBiZ0PJGVeJ"
+
 ALBUM_ID="IKJMxZugjcsfgORWnGhqhtzX"
 
 SOURCE_DIR="/home/yassine/datasource"
