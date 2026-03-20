@@ -1,0 +1,6 @@
+
+# .gitignore ignorer le README.md
+README.md
+# Ignorer les fichiers de configuration
+config/
+# Ignorer les fichiers de log
